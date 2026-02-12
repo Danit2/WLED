@@ -94,3 +94,6 @@
 .i-presets:before {
   content: "\e04c";
 }
+.i-fseq:before {
+  content: "\e0d2";
+}
