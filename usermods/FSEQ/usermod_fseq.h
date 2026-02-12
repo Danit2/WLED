@@ -42,11 +42,11 @@
 #ifdef WLED_USE_SD_SPI
 #ifndef SPI_PORT_DEFINED
 #if CONFIG_IDF_TARGET_ESP32
-  inline SPIClass spiPort = SPIClass(VSPI);
+inline SPIClass spiPort = SPIClass(VSPI);
 #elif CONFIG_IDF_TARGET_ESP32S3
-  inline SPIClass spiPort = SPI;
+inline SPIClass spiPort = SPI;
 #else
-  inline SPIClass spiPort = SPI;
+inline SPIClass spiPort = SPI;
 #endif
 #define SPI_PORT_DEFINED
 #include "../usermods/FSEQ/fseq_player.h"
