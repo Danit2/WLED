@@ -132,14 +132,14 @@ private:
     String devName = getDeviceName();
     doc["HostName"] = devName;
     doc["HostDescription"] = devName;
-    doc["Platform"] = "FPP";
-    doc["Variant"] = "Remote";
+    doc["Platform"] = "ESPixelStick";
+    doc["Variant"] = "ESPixelStick-ESP32";
     doc["Mode"] = "remote"; // 'remote' or 'bridge'
-    doc["Version"] = "9.x";
+    doc["Version"] = "4.x-dev";
 
-    doc["majorVersion"] = 9;
-    doc["minorVersion"] = 3;
-    doc["typeId"] = 0;
+    doc["majorVersion"] = 4;
+    doc["minorVersion"] = 0;
+    doc["typeId"] = 195;
     doc["UUID"] = WiFi.macAddress(); // Use standard MAC format
 
     JsonObject utilization = doc.createNestedObject("Utilization");
@@ -191,7 +191,7 @@ private:
       // doc["time_remaining"] = ...;
       doc["status"] = 1;
       doc["status_name"] = "playing";
-      doc["mode"] = 0;
+      doc["mode"] = 8;
       doc["mode_name"] = "remote";
     } else {
       doc["current_sequence"] = "";
@@ -204,7 +204,7 @@ private:
       doc["time_remaining"] = "00:00";
       doc["status"] = 0;
       doc["status_name"] = "idle";
-      doc["mode"] = 0;
+      doc["mode"] = 8;
       doc["mode_name"] = "remote";
     }
 
@@ -232,9 +232,9 @@ private:
 	obj["hostname"] = devName;
 	obj["id"] = "WLED-" + id;
 	obj["ip"] = WiFi.localIP().toString();
-	obj["version"] = "9.3";
-	obj["hardwareType"] = "FPP Remote";
-	obj["type"] = 0;
+	obj["version"] = "4.x-dev";
+	obj["hardwareType"] = "ESPixelStick-ESP32";
+	obj["type"] = 195;
 	obj["mode"] = "remote";
 	obj["num_chan"] = strip.getLength() * 3;
 	obj["NumPixelPort"] = 5;
@@ -265,7 +265,7 @@ private:
     buf[11] = versionMajor & 0xFF;
     buf[12] = (versionMinor >> 8) & 0xFF;
     buf[13] = versionMinor & 0xFF;
-    buf[14] = 0x01;
+    buf[14] = 0x08;
     IPAddress ip = WiFi.localIP();
     buf[15] = ip[0];
     buf[16] = ip[1];
