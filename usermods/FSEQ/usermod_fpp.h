@@ -139,7 +139,7 @@ private:
     // Hardware ID = 0 (FPP Remote)
     buf[9]=0x00;
 
-    buf[14]=0x08; // operatingMode remote
+    buf[14]=0x01; // operatingMode remote
 
     IPAddress ip = WiFi.localIP();
     buf[15]=ip[0];
