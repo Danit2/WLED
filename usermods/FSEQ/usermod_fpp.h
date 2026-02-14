@@ -626,27 +626,33 @@ public:
     }
   }
 
-	void loop() {
-	  if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
-		if (udp.listenMulticast(multicastAddr, udpPort)) {
-		  udpStarted = true;
-		  udp.onPacket(
-			  [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
-		  DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
-		}
-	  }
+  // Main loop function
+  void loop() {
+    if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
+      if (udp.listenMulticast(multicastAddr, udpPort)) {
+        udpStarted = true;
+        udp.onPacket(
+            [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
+        DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
+      }
+    }
+	
+	// --- Ping Broadcast ---
+	static unsigned long lastPing = 0;
 
-	  // --- Ping Broadcast ---
-	  static unsigned long lastPing = 0;
-
-	  if (millis() - lastPing > 5000) {
+	if (millis() - lastPing > 5000) {
 		sendPingPacket(IPAddress(255,255,255,255));
 		sendPingPacket(multicastAddr);
 		lastPing = millis();
-	  }
-
-	  // Playback
-	  FSEQPlayer::handlePlayRecording();
 	}
+    
+	// Process FSEQ playback
+    FSEQPlayer::handlePlayRecording();
+  }
+
+  uint16_t getId() { return USERMOD_ID_SD_CARD; }
+  void addToConfig(JsonObject &root) {}
+  bool readFromConfig(JsonObject &root) { return true; }
+};
 
 const char UsermodFPP::_name[] PROGMEM = "FPP Connect";
