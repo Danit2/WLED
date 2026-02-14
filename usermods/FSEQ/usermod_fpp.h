@@ -434,9 +434,10 @@ public:
                 String json = buildSystemStatusJSON();
                 request->send(200, "application/json", json);
               });
-    server.on("/api/fppd/multiSyncSystems",HTTP_GET, 
-			  [this](AsyncWebServerRequest *r){ 
-			    r->send(200,"application/json",buildMultiSyncJSON()); 
+    server.on("/api/fppd/multiSyncSystems", HTTP_GET,
+			  [this](AsyncWebServerRequest *request) {
+				String json = buildFppdMultiSyncSystemsJSON();
+				request->send(200, "application/json", json);
 			  });
     // Other API endpoints as needed...
 
