@@ -221,13 +221,16 @@ private:
   String buildFppdMultiSyncSystemsJSON() {
     DynamicJsonDocument doc(512);
     String devName = getDeviceName();
+	String id = WiFi.macAddress();
+	id.replace(":", "");
+	id.toUpperCase();
     doc["hostname"] = devName;
-    doc["id"] = devName;
+	doc["id"] = "WLED-" + id;
     doc["ip"] = WiFi.localIP().toString();
     doc["version"] = "4.x-dev";
     doc["hardwareType"] = "ESPixelStick-ESP32";
     doc["type"] = 195;
-    doc["num_chan"] = 2052;
+    doc["num_chan"] = totalNumPixels() * 3;
     doc["NumPixelPort"] = 5;
     doc["NumSerialPort"] = 0;
     String json;
@@ -278,7 +281,7 @@ private:
     udp.writeTo(buf, sizeof(buf), destination, udpPort);
   }
 
-  // UDP - send a sync message
+/*   // UDP - send a sync message
   void sendSyncMessage(uint8_t action, const String &fileName,
                        uint32_t currentFrame, float secondsElapsed) {
     FPPMultiSyncPacket syncPacket;
@@ -297,11 +300,11 @@ private:
             sizeof(syncPacket.filename) - 1);
     syncPacket.filename[sizeof(syncPacket.filename) - 1] = 0x00;
     // Send to both broadcast and multicast addresses
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
-                IPAddress(255, 255, 255, 255), udpPort);
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
-                udpPort);
-  }
+    //udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
+    //            IPAddress(255, 255, 255, 255), udpPort);
+    //udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
+    //            udpPort);
+  } */
 
   // UDP - process received packet
   void processUdpPacket(AsyncUDPPacket packet) {
@@ -432,9 +435,10 @@ public:
                 request->send(200, "application/json", json);
               });
     server.on("/api/fppd/multiSyncSystems", HTTP_GET,
-              [this](AsyncWebServerRequest *request) {
-                request->send(404, "text/plain", "Not Found");
-              });
+			  [this](AsyncWebServerRequest *request) {
+				String json = buildFppdMultiSyncSystemsJSON();
+				request->send(200, "application/json", json);
+			  });
     // Other API endpoints as needed...
 
     // Endpoint for file upload (raw, application/octet-stream)
