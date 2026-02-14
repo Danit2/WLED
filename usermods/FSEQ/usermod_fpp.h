@@ -101,14 +101,14 @@ private:
 
     String id = WiFi.macAddress();
     id.replace(":","");
-    id.toUpperCase();
+    id = id.toUpperCase();
 
     obj["hostname"] = getDeviceName();
     obj["id"] = id;
     obj["ip"] = WiFi.localIP().toString();
     obj["version"] = "4.0";
-    obj["hardwareType"] = "FPP Remote";
-    obj["type"] = 0;
+    obj["hardwareType"] = "FPP Remote";  // Wichtig!
+    obj["type"] = 0;                     // 0 = Remote
     obj["mode"] = "remote";
     obj["num_chan"] = strip.getLength()*3;
 
