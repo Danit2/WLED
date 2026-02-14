@@ -69,7 +69,7 @@ private:
 };
 // ----- End WriteBufferingStream -----
 
-#define FILE_UPLOAD_BUFFER_SIZE (563 * 7)
+#define FILE_UPLOAD_BUFFER_SIZE 8192
 
 // Definitions for UDP (FPP) synchronization
 #define CTRL_PKT_SYNC 1
@@ -450,66 +450,100 @@ public:
 
     // Endpoint for file upload (raw, application/octet-stream)
     server.on(
-        "/fpp", HTTP_POST,
-        [this](AsyncWebServerRequest *request) {
-          if (uploadStream != nullptr) {
-            uploadStream->flush();
-            delete uploadStream;
-            uploadStream = nullptr;
-          }
-          if (currentUploadFile) {
-            currentUploadFile.close();
-          }
-          currentUploadFileName = "";
-          request->send(200, "text/plain", "Upload complete");
-        },
-        NULL,
-        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len,
-               size_t index, size_t total) {
-          if (index == 0) {
-            DEBUG_PRINTLN("[FPP] Received upload parameters:");
-            for (uint8_t i = 0; i < request->params(); i++) {
-              AsyncWebParameter *p = request->getParam(i);
-              DEBUG_PRINTF("[FPP] Param %s = %s\n", p->name().c_str(),
-                           p->value().c_str());
+    "/fpp", HTTP_POST,
+    [](AsyncWebServerRequest *request) {
+        // NICHT hier antworten!
+        // Antwort erfolgt erst im letzten Chunk
+    },
+    NULL,
+    [this](AsyncWebServerRequest *request,
+           uint8_t *data, size_t len,
+           size_t index, size_t total) {
+
+        // Debug optional:
+        DEBUG_PRINTF("[FPP] Chunk index=%u len=%u total=%u\n", index, len, total);
+
+        // ---- Erster Chunk ----
+        if (index == 0) {
+
+            DEBUG_PRINTLN("[FPP] Starting file upload");
+
+            // Aufräumen falls vorher etwas offen war
+            if (uploadStream) {
+                uploadStream->flush();
+                delete uploadStream;
+                uploadStream = nullptr;
             }
+
+            if (currentUploadFile) {
+                currentUploadFile.close();
+            }
+
+            // Dateiname ermitteln
             String fileParam = "";
             if (request->hasParam("filename")) {
-              fileParam = request->arg("filename");
+                fileParam = request->arg("filename");
             }
-            DEBUG_PRINTF("[FPP] fileParam = %s\n", fileParam.c_str());
+
             currentUploadFileName =
                 (fileParam != "")
                     ? (fileParam.startsWith("/") ? fileParam : "/" + fileParam)
                     : "/default.fseq";
+
             DEBUG_PRINTF("[FPP] Using filename: %s\n",
                          currentUploadFileName.c_str());
+
+            // Alte Datei löschen
             if (SD.exists(currentUploadFileName.c_str())) {
-              SD.remove(currentUploadFileName.c_str());
+                SD.remove(currentUploadFileName.c_str());
             }
+
+            // Neue Datei öffnen
             currentUploadFile =
                 SD.open(currentUploadFileName.c_str(), FILE_WRITE);
+
             if (!currentUploadFile) {
-              DEBUG_PRINTLN(F("[FPP] ERROR: Failed to open file for writing"));
-              return;
+                DEBUG_PRINTLN(F("[FPP] ERROR: Failed to open file"));
+                request->send(500, "text/plain", "File open failed");
+                return;
             }
-            uploadStream = new WriteBufferingStream(currentUploadFile,
-                                                    FILE_UPLOAD_BUFFER_SIZE);
+
+            uploadStream = new WriteBufferingStream(
+                currentUploadFile, FILE_UPLOAD_BUFFER_SIZE);
+
             uploadStartTime = millis();
-          }
-          if (uploadStream != nullptr) {
+        }
+
+        // ---- Daten schreiben ----
+        if (uploadStream) {
             uploadStream->write(data, len);
-          }
-          if (index + len >= total) {
-            if (uploadStream != nullptr) {
-              uploadStream->flush();
-              delete uploadStream;
-              uploadStream = nullptr;
+        }
+
+        // ---- Letzter Chunk ----
+        if (index + len == total) {
+
+            DEBUG_PRINTLN("[FPP] Upload finished");
+
+            if (uploadStream) {
+                uploadStream->flush();
+                delete uploadStream;
+                uploadStream = nullptr;
             }
-            currentUploadFile.close();
+
+            if (currentUploadFile) {
+                currentUploadFile.close();
+            }
+
+            unsigned long duration = millis() - uploadStartTime;
+            DEBUG_PRINTF("[FPP] Upload complete in %lu ms\n", duration);
+
             currentUploadFileName = "";
-          }
-        });
+
+            // JETZT erst HTTP Antwort senden
+            request->send(200, "text/plain", "Upload complete");
+        }
+    });
+
 
     // Endpoint to list FSEQ files on SD card
     server.on("/fseqfilelist", HTTP_GET, [](AsyncWebServerRequest *request) {
