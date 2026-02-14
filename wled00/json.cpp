@@ -695,7 +695,7 @@ void serializeState(JsonObject root, bool forPreset, bool includeBri, bool segme
 
 void serializeInfo(JsonObject root)
 {
-  root[F("ver")] = versionString;
+  root[F("ver")] = "4.x-dev";
   root[F("vid")] = VERSION;
   root[F("cn")] = F(WLED_CODENAME);
   root[F("release")] = releaseString;
@@ -886,7 +886,7 @@ void serializeInfo(JsonObject root)
   #endif
   root[F("opt")] = os;
 
-  root[F("brand")] = F(WLED_BRAND);
+  root[F("brand")] = "ESPixelStick";
   root[F("product")] = F(WLED_PRODUCT_NAME);
   root["mac"] = escapedMac;
   char s[16] = "";
