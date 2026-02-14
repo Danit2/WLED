@@ -153,7 +153,7 @@ private:
   String buildSystemInfoJSON() {
     DynamicJsonDocument doc(1024);
     String devName = getDeviceName();
-    doc["HostName"] = "WLED-TEST";
+    doc["HostName"] = devName;
     doc["HostDescription"] = devName;
     doc["Platform"] = "ESPixelStick";
     doc["Variant"] = "ESPixelStick-ESP32";
@@ -252,7 +252,7 @@ private:
 	id.replace(":", "");
 	id.toUpperCase();
 
-	obj["hostname"] = "WLED-TEST";
+	obj["hostname"] = devName;
 	obj["id"] = "WLED-" + id;
 	obj["ip"] = WiFi.localIP().toString();
 	obj["version"] = "4.x-dev";
