@@ -218,26 +218,32 @@ private:
   }
 
   // Build JSON for FPP multi-sync systems
-  String buildFppdMultiSyncSystemsJSON() {
-    DynamicJsonDocument doc(512);
-    String devName = getDeviceName();
-	String id = WiFi.macAddress();
-	id.replace(":", "");
-	id.toUpperCase();
-    doc["hostname"] = devName;
-	doc["id"] = "WLED-" + id;
-    doc["ip"] = WiFi.localIP().toString();
-    doc["version"] = "4.x-dev";
-    doc["hardwareType"] = "ESPixelStick-ESP32";
-    doc["type"] = 195;
-    doc["num_chan"] = strip.getLength() * 3;
-	doc["mode"] = "remote";
-    doc["NumPixelPort"] = 5;
-    doc["NumSerialPort"] = 0;
-    String json;
-    serializeJson(doc, json);
-    return json;
-  }
+String buildFppdMultiSyncSystemsJSON() {
+  DynamicJsonDocument doc(1024);
+
+  JsonArray arr = doc.to<JsonArray>();
+  JsonObject obj = arr.createNestedObject();
+
+  String devName = getDeviceName();
+  String id = WiFi.macAddress();
+  id.replace(":", "");
+  id.toUpperCase();
+
+  obj["hostname"] = devName;
+  obj["id"] = "WLED-" + id;
+  obj["ip"] = WiFi.localIP().toString();
+  obj["version"] = "4.x-dev";
+  obj["hardwareType"] = "ESPixelStick-ESP32";
+  obj["type"] = 195;
+  obj["mode"] = "remote";
+  obj["num_chan"] = strip.getLength() * 3;
+  obj["NumPixelPort"] = 5;
+  obj["NumSerialPort"] = 0;
+
+  String json;
+  serializeJson(doc, json);
+  return json;
+}
 
   // UDP - send a ping packet
   void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
