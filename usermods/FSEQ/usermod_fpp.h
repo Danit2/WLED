@@ -153,7 +153,7 @@ private:
   String buildSystemInfoJSON() {
     DynamicJsonDocument doc(1024);
     String devName = getDeviceName();
-    doc["HostName"] = devName;
+    doc["HostName"] = WLED-TEST;
     doc["HostDescription"] = devName;
     doc["Platform"] = "ESPixelStick";
     doc["Variant"] = "ESPixelStick-ESP32";
@@ -162,7 +162,7 @@ private:
 
     doc["majorVersion"] = 4;
     doc["minorVersion"] = 0;
-    doc["typeId"] = 195;
+    doc["typeId"] = 0xC3;
     doc["UUID"] = WiFi.macAddress(); // Use standard MAC format
 
     JsonObject utilization = doc.createNestedObject("Utilization");
@@ -252,12 +252,12 @@ private:
 	id.replace(":", "");
 	id.toUpperCase();
 
-	obj["hostname"] = devName;
+	obj["hostname"] = "WLED-TEST";
 	obj["id"] = "WLED-" + id;
 	obj["ip"] = WiFi.localIP().toString();
 	obj["version"] = "4.x-dev";
 	obj["hardwareType"] = "ESPixelStick-ESP32";
-	obj["type"] = 195;
+	obj["type"] = 0xC3;
 	obj["mode"] = "remote";
 	obj["num_chan"] = strip.getLength() * 3;
 	obj["NumPixelPort"] = 5;
@@ -283,7 +283,7 @@ private:
     packet.data_len = 294;
     packet.ping_version = 0x03;
     packet.ping_subtype = 0x00;
-    packet.ping_hardware = 195;
+    packet.ping_hardware = 0xC3;
 
     packet.versionMajor = 0;
     packet.versionMinor = 16;
