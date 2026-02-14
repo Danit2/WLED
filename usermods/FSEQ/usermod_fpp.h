@@ -108,6 +108,33 @@ struct FPPMultiSyncPacket {
 };
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+
+struct FPPPingPacket {
+  uint8_t header[4];        // "FPPD"
+  uint8_t packet_type;     // 0x04
+  uint16_t data_len;       // 294
+
+  uint8_t ping_version;    // 0x03
+  uint8_t ping_subtype;    // 0x00
+  uint16_t ping_hardware; // 195 = ESPixelStick
+
+  uint16_t versionMajor;
+  uint16_t versionMinor;
+
+  uint8_t operatingMode;
+
+  uint8_t ipAddress[4];
+
+  char hostName[32];
+  char version[16];
+  char hardwareType[16];
+
+  uint8_t ranges[1];
+};
+
+#pragma pack(pop)
+
 // UsermodFPP class: Implements FPP (FSEQ/UDP) functionality
 class UsermodFPP : public Usermod {
 private:
@@ -245,50 +272,63 @@ String buildFppdMultiSyncSystemsJSON() {
   return json;
 }
 
-  // UDP - send a ping packet
-  void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
-    uint8_t buf[301];
-    memset(buf, 0, sizeof(buf));
-    buf[0] = 'F';
-    buf[1] = 'P';
-    buf[2] = 'P';
-    buf[3] = 'D';
-    buf[4] = 0x04; // ping type
-    uint16_t dataLen = 294;
-    buf[5] = (dataLen >> 8) & 0xFF;
-    buf[6] = dataLen & 0xFF;
-    buf[7] = 0x03;
-    buf[8] = 0x00;
-    buf[9] = 0xC3;
-    uint16_t versionMajor = 0, versionMinor = 16;
-    buf[10] = (versionMajor >> 8) & 0xFF;
-    buf[11] = versionMajor & 0xFF;
-    buf[12] = (versionMinor >> 8) & 0xFF;
-    buf[13] = versionMinor & 0xFF;
-    buf[14] = 0x08;
-    IPAddress ip = WiFi.localIP();
-    buf[15] = ip[0];
-    buf[16] = ip[1];
-    buf[17] = ip[2];
-    buf[18] = ip[3];
-    String hostName = getDeviceName();
-    if (hostName.length() > 32)
-      hostName = hostName.substring(0, 32);
-    for (int i = 0; i < 32; i++) {
-      buf[19 + i] = (i < hostName.length()) ? hostName[i] : 0;
-    }
-    String verStr = "4.x-dev";
-    for (int i = 0; i < 16; i++) {
-      buf[51 + i] = (i < verStr.length()) ? verStr[i] : 0;
-    }
-    String hwType = "ESPixelStick-ESP32";
-    for (int i = 0; i < 16; i++) {
-      buf[67 + i] = (i < hwType.length()) ? hwType[i] : 0;
-    }
-    udp.writeTo(buf, sizeof(buf), destination, udpPort);
-  }
+static uint16_t swap16(uint16_t v) {
+  return (v >> 8) | (v << 8);
+}
 
-/*   // UDP - send a sync message
+  // UDP - send a ping packet
+	void sendPingPacket(IPAddress destination = IPAddress(255,255,255,255)) {
+
+	  FPPPingPacket packet;
+	  memset(&packet, 0, sizeof(packet));
+
+	  // Header
+	  packet.header[0] = 'F';
+	  packet.header[1] = 'P';
+	  packet.header[2] = 'P';
+	  packet.header[3] = 'D';
+
+	  packet.packet_type = CTRL_PKT_PING;
+	  packet.data_len = swap16(294);
+
+	  packet.ping_version = 0x03;
+	  packet.ping_subtype = 0x00;
+	  packet.ping_hardware = swap16(195);
+
+	  // Version (Fake FPP Version)
+	  uint16_t major = 4;
+	  uint16_t minor = 0;
+
+	  packet.versionMajor = swap16(major);
+	  packet.versionMinor = swap16(minor);
+
+	  // Operating Mode
+	  // 0x08 = Remote Output (wie ESPixelStick)
+	  packet.operatingMode = 0x08;
+
+	  // IP
+	  IPAddress ip = WiFi.localIP();
+	  memcpy(packet.ipAddress, &ip, 4);
+
+	  // Hostname
+	  String host = getDeviceName();
+	  strncpy(packet.hostName, host.c_str(), sizeof(packet.hostName)-1);
+
+	  // Version String
+	  strncpy(packet.version, "4.0", sizeof(packet.version)-1);
+
+	  // Hardware Type
+	  strncpy(packet.hardwareType, "ESPixelStick-ESP32",
+			  sizeof(packet.hardwareType)-1);
+
+	  packet.ranges[0] = 0;
+
+	  udp.writeTo((uint8_t*)&packet, sizeof(packet),
+				  destination, udpPort);
+	}
+
+
+  // UDP - send a sync message
   void sendSyncMessage(uint8_t action, const String &fileName,
                        uint32_t currentFrame, float secondsElapsed) {
     FPPMultiSyncPacket syncPacket;
@@ -298,7 +338,8 @@ String buildFppdMultiSyncSystemsJSON() {
     syncPacket.header[2] = 'P';
     syncPacket.header[3] = 'D';
     syncPacket.packet_type = CTRL_PKT_SYNC;
-    write16((uint8_t *)&syncPacket.data_len, sizeof(syncPacket));
+    write16((uint8_t *)&syncPacket.data_len,
+        sizeof(FPPMultiSyncPacket) - 7);
     syncPacket.sync_action = action;
     syncPacket.sync_type = 0; // FSEQ synchronization
     write32((uint8_t *)&syncPacket.frame_number, currentFrame);
@@ -307,11 +348,11 @@ String buildFppdMultiSyncSystemsJSON() {
             sizeof(syncPacket.filename) - 1);
     syncPacket.filename[sizeof(syncPacket.filename) - 1] = 0x00;
     // Send to both broadcast and multicast addresses
-    //udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
-    //            IPAddress(255, 255, 255, 255), udpPort);
-    //udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
-    //            udpPort);
-  } */
+    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
+                IPAddress(255, 255, 255, 255), udpPort);
+    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
+                udpPort);
+  }
 
   // UDP - process received packet
   void processUdpPacket(AsyncUDPPacket packet) {
@@ -446,6 +487,21 @@ public:
 				String json = buildFppdMultiSyncSystemsJSON();
 				request->send(200, "application/json", json);
 			  });
+	server.on("/api/fppd/mode", HTTP_GET,
+			  [](AsyncWebServerRequest *request){
+				request->send(200,"application/json",
+					"{\"mode\":8,\"mode_name\":\"remote\"}");
+			  });
+	server.on("/api/fppd/version", HTTP_GET,
+			  [](AsyncWebServerRequest *request){
+				request->send(200,"application/json",
+					"{\"version\":\"4.0\"}");
+			  });
+	server.on("/api/fppd/status", HTTP_GET,
+			  [](AsyncWebServerRequest *request){
+				request->send(200,"application/json",
+					"{\"status\":\"running\"}");
+			  });
     // Other API endpoints as needed...
 
     // Endpoint for file upload (raw, application/octet-stream)
@@ -570,23 +626,27 @@ public:
     }
   }
 
-  // Main loop function
-  void loop() {
-    if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
-      if (udp.listenMulticast(multicastAddr, udpPort)) {
-        udpStarted = true;
-        udp.onPacket(
-            [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
-        DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
-      }
+void loop() {
+  if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
+    if (udp.listenMulticast(multicastAddr, udpPort)) {
+      udpStarted = true;
+      udp.onPacket(
+          [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
+      DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
     }
-    // Process FSEQ playback
-    FSEQPlayer::handlePlayRecording();
   }
 
-  uint16_t getId() { return USERMOD_ID_SD_CARD; }
-  void addToConfig(JsonObject &root) {}
-  bool readFromConfig(JsonObject &root) { return true; }
-};
+  // --- Ping Broadcast ---
+  static unsigned long lastPing = 0;
+
+  if (millis() - lastPing > 5000) {
+    sendPingPacket(IPAddress(255,255,255,255));
+    sendPingPacket(multicastAddr);
+    lastPing = millis();
+  }
+
+  // Playback
+  FSEQPlayer::handlePlayRecording();
+}
 
 const char UsermodFPP::_name[] PROGMEM = "FPP Connect";
