@@ -153,7 +153,7 @@ private:
   String buildSystemInfoJSON() {
     DynamicJsonDocument doc(1024);
     String devName = getDeviceName();
-    doc["HostName"] = WLED-TEST;
+    doc["HostName"] = "WLED-TEST";
     doc["HostDescription"] = devName;
     doc["Platform"] = "ESPixelStick";
     doc["Variant"] = "ESPixelStick-ESP32";
