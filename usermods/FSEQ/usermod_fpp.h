@@ -626,27 +626,27 @@ public:
     }
   }
 
-void loop() {
-  if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
-    if (udp.listenMulticast(multicastAddr, udpPort)) {
-      udpStarted = true;
-      udp.onPacket(
-          [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
-      DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
-    }
-  }
+	void loop() {
+	  if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
+		if (udp.listenMulticast(multicastAddr, udpPort)) {
+		  udpStarted = true;
+		  udp.onPacket(
+			  [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
+		  DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
+		}
+	  }
 
-  // --- Ping Broadcast ---
-  static unsigned long lastPing = 0;
+	  // --- Ping Broadcast ---
+	  static unsigned long lastPing = 0;
 
-  if (millis() - lastPing > 5000) {
-    sendPingPacket(IPAddress(255,255,255,255));
-    sendPingPacket(multicastAddr);
-    lastPing = millis();
-  }
+	  if (millis() - lastPing > 5000) {
+		sendPingPacket(IPAddress(255,255,255,255));
+		sendPingPacket(multicastAddr);
+		lastPing = millis();
+	  }
 
-  // Playback
-  FSEQPlayer::handlePlayRecording();
-}
+	  // Playback
+	  FSEQPlayer::handlePlayRecording();
+	}
 
 const char UsermodFPP::_name[] PROGMEM = "FPP Connect";
