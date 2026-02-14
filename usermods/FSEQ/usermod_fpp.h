@@ -101,7 +101,7 @@ private:
 
     String id = WiFi.macAddress();
     id.replace(":","");
-    id = id.toUpperCase();
+    id.toUpperCase();
 
     obj["hostname"] = getDeviceName();
     obj["id"] = id;
