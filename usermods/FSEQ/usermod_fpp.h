@@ -79,6 +79,9 @@ private:
 // UDP port for FPP discovery/synchronization
 const uint16_t UDP_SYNC_PORT = 32320;
 
+unsigned long lastPingTime = 0;
+const unsigned long pingInterval = 5000; // 5 Sekunden
+
 // Inline functions to write 16-bit and 32-bit values
 static inline void write16(uint8_t *dest, uint16_t value) {
   dest[0] = (value >> 8) & 0xff;
@@ -105,6 +108,26 @@ struct FPPMultiSyncPacket {
   float seconds_elapsed; // elapsed seconds
   char filename[64];     // name of the file to play
   uint8_t raw[128];      // raw packet data
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct FPPPingPacket {
+  uint8_t header[4];
+  uint8_t packet_type;
+  uint16_t data_len;
+  uint8_t ping_version;
+  uint8_t ping_subtype;
+  uint8_t ping_hardware;
+  uint16_t versionMajor;
+  uint16_t versionMinor;
+  uint8_t operatingMode;
+  uint8_t ipAddress[4];
+  char hostName[32];
+  char version[16];
+  char hardwareType[16];
+  uint8_t ranges[1];
+  uint8_t raw[301];
 };
 #pragma pack(pop)
 
@@ -246,72 +269,38 @@ private:
   }
 
   // UDP - send a ping packet
-  void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
-    uint8_t buf[301];
-    memset(buf, 0, sizeof(buf));
-    buf[0] = 'F';
-    buf[1] = 'P';
-    buf[2] = 'P';
-    buf[3] = 'D';
-    buf[4] = 0x04; // ping type
-    uint16_t dataLen = 294;
-    buf[5] = (dataLen >> 8) & 0xFF;
-    buf[6] = dataLen & 0xFF;
-    buf[7] = 0x03;
-    buf[8] = 0x00;
-    buf[9] = 0xC3;
-    uint16_t versionMajor = 0, versionMinor = 16;
-    buf[10] = (versionMajor >> 8) & 0xFF;
-    buf[11] = versionMajor & 0xFF;
-    buf[12] = (versionMinor >> 8) & 0xFF;
-    buf[13] = versionMinor & 0xFF;
-    buf[14] = 0x08;
-    IPAddress ip = WiFi.localIP();
-    buf[15] = ip[0];
-    buf[16] = ip[1];
-    buf[17] = ip[2];
-    buf[18] = ip[3];
-    String hostName = getDeviceName();
-    if (hostName.length() > 32)
-      hostName = hostName.substring(0, 32);
-    for (int i = 0; i < 32; i++) {
-      buf[19 + i] = (i < hostName.length()) ? hostName[i] : 0;
-    }
-    String verStr = "4.x-dev";
-    for (int i = 0; i < 16; i++) {
-      buf[51 + i] = (i < verStr.length()) ? verStr[i] : 0;
-    }
-    String hwType = "ESPixelStick-ESP32";
-    for (int i = 0; i < 16; i++) {
-      buf[67 + i] = (i < hwType.length()) ? hwType[i] : 0;
-    }
-    udp.writeTo(buf, sizeof(buf), destination, udpPort);
-  }
+  void sendPingPacket(IPAddress destination = IPAddress(255,255,255,255))
+  {
+    FPPPingPacket packet;
+    memset(&packet, 0, sizeof(packet));
 
-  // UDP - send a sync message
-  void sendSyncMessage(uint8_t action, const String &fileName,
-                       uint32_t currentFrame, float secondsElapsed) {
-    FPPMultiSyncPacket syncPacket;
-    // Fill in header "FPPD"
-    syncPacket.header[0] = 'F';
-    syncPacket.header[1] = 'P';
-    syncPacket.header[2] = 'P';
-    syncPacket.header[3] = 'D';
-    syncPacket.packet_type = CTRL_PKT_SYNC;
-    write16((uint8_t *)&syncPacket.data_len, sizeof(syncPacket));
-    syncPacket.sync_action = action;
-    syncPacket.sync_type = 0; // FSEQ synchronization
-    write32((uint8_t *)&syncPacket.frame_number, currentFrame);
-    syncPacket.seconds_elapsed = secondsElapsed;
-    strncpy(syncPacket.filename, fileName.c_str(),
-            sizeof(syncPacket.filename) - 1);
-    syncPacket.filename[sizeof(syncPacket.filename) - 1] = 0x00;
-    // Send to both broadcast and multicast addresses
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
-                IPAddress(255, 255, 255, 255), udpPort);
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
-                udpPort);
-  }
+    packet.header[0] = 'F';
+    packet.header[1] = 'P';
+    packet.header[2] = 'P';
+    packet.header[3] = 'D';
+
+    packet.packet_type = 0x04;
+    packet.data_len = 294;
+    packet.ping_version = 0x03;
+    packet.ping_subtype = 0x00;
+    packet.ping_hardware = 195;
+
+    packet.versionMajor = 0;
+    packet.versionMinor = 16;
+
+    packet.operatingMode = 0x08;   // <<< REMOTE MODE !!!
+
+    IPAddress ip = WiFi.localIP();
+    memcpy(packet.ipAddress, &ip, 4);
+
+    String hostName = getDeviceName();
+    strncpy(packet.hostName, hostName.c_str(), sizeof(packet.hostName));
+
+    strncpy(packet.version, "4.x-dev", sizeof(packet.version));
+    strncpy(packet.hardwareType, "ESPixelStick-ESP32", sizeof(packet.hardwareType));
+
+    udp.writeTo((uint8_t*)&packet, sizeof(packet), destination, udpPort);
+  }  
 
   // UDP - process received packet
   void processUdpPacket(AsyncUDPPacket packet) {
@@ -612,6 +601,14 @@ public:
         udp.onPacket(
             [this](AsyncUDPPacket packet) { processUdpPacket(packet); });
         DEBUG_PRINTLN(F("[FPP] UDP listener started on multicast"));
+      }
+    }
+	
+	if (udpStarted && WiFi.status() == WL_CONNECTED) {
+
+      if (millis() - lastPingTime > pingInterval) {
+          sendPingPacket();
+          lastPingTime = millis();
       }
     }
     // Process FSEQ playback
