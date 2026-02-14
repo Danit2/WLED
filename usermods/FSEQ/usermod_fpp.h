@@ -200,7 +200,6 @@ private:
       // OPEN
       case 3:
         FSEQPlayer::loadRecording(file.c_str(),0,strip.getLength(),0);
-        FSEQPlayer::pausePlayback();
         break;
 
       // START
