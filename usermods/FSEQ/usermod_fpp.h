@@ -364,9 +364,9 @@ private:
 
     switch (action) {
     case 0: // SYNC_PKT_START
+	  realtimeLock(0, REALTIME_MODE_GENERIC);
       FSEQPlayer::loadRecording(fileName.c_str(), 0, strip.getLength(),
                                 secondsElapsed);
-	  realtimeLock(0, REALTIME_MODE_GENERIC);
       break;
     case 1: // SYNC_PKT_STOP
       FSEQPlayer::clearLastPlayback();
