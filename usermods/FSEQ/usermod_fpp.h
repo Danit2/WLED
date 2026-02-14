@@ -231,6 +231,7 @@ private:
     doc["hardwareType"] = "ESPixelStick-ESP32";
     doc["type"] = 195;
     doc["num_chan"] = strip.getLength() * 3;
+	doc["mode"] = "remote";
     doc["NumPixelPort"] = 5;
     doc["NumSerialPort"] = 0;
     String json;
