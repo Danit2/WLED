@@ -60,6 +60,9 @@ jobs:
           cache: 'pip'
     - name: Install PlatformIO
       run: pip install -r requirements.txt
+      
+    - name: Clean PlatformIO
+      run: pio run --target clean -e ${{ matrix.environment }}
 
     - name: Build firmware
       run: pio run -e ${{ matrix.environment }}
