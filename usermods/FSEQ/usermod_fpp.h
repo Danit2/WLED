@@ -230,7 +230,7 @@ private:
     doc["version"] = "4.x-dev";
     doc["hardwareType"] = "ESPixelStick-ESP32";
     doc["type"] = 195;
-    doc["num_chan"] = totalNumPixels() * 3;
+    doc["num_chan"] = strip.getLength() * 3;
     doc["NumPixelPort"] = 5;
     doc["NumSerialPort"] = 0;
     String json;
