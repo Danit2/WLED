@@ -267,6 +267,7 @@ static_assert(WLED_MAX_BUSSES <= 32, "WLED_MAX_BUSSES exceeds hard limit");
 #define REALTIME_MODE_TPM2NET     7
 #define REALTIME_MODE_DDP         8
 #define REALTIME_MODE_DMX         9
+#define REALTIME_MODE_FSEQ        10
 
 //realtime override modes
 #define REALTIME_OVERRIDE_NONE    0

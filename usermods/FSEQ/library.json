@@ -1,0 +1,7 @@
+{
+  "name": "FSEQ",
+  "build": {
+    "libArchive": false,
+    "extraScript": "auto_fseq_sd.py"
+  }
+}
