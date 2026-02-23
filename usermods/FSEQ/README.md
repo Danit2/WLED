@@ -1,6 +1,7 @@
 # ✨ Usermod FSEQ ✨
 
 > **Created original by: Andrej Chrcek**
+
 > **Updatet by: Danit2**
 
 Welcome to the **Usermod FSEQ** project!  
@@ -15,6 +16,8 @@ Access the interface via:
 http://yourIP/fsequi
 
 or over the WLED Infotab
+
+<img width="792" height="206" alt="image" src="https://github.com/user-attachments/assets/e58693ec-afe8-4c28-8343-5b3382cd10ef" />
 
 ---
 
