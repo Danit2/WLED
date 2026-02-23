@@ -15,7 +15,6 @@ class SDManager {
     SDManager() {}
     bool begin();
     void end();
-    String listFiles(const char* dirname);
     bool deleteFile(const char* path);
 };
 

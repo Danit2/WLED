@@ -115,21 +115,20 @@ bool FSEQPlayer::stopBecauseAtTheEnd() {
 
     if (recordingRepeats == RECORDING_REPEAT_LOOP) {
       frame = 0;
-      recordingFile.seek(file_header.header_length);
+      recordingFile.seek(file_header.channel_data_offset);
       return false;
     }
 
     if (recordingRepeats > 0) {
       recordingRepeats--;
       frame = 0;
-      recordingFile.seek(file_header.header_length);
+      recordingFile.seek(file_header.channel_data_offset);
       DEBUG_PRINTF("Repeat recording again for: %d\n", recordingRepeats);
       return false;
     }
 
     DEBUG_PRINTLN("Finished playing recording, disabling realtime mode");
     realtimeLock(10, REALTIME_MODE_INACTIVE);
-    recordingFile.close();
     clearLastPlayback();
     return true;
   }
@@ -160,11 +159,14 @@ void FSEQPlayer::handlePlayRecording() {
   playNextRecordingFrame();
 }
 
-void FSEQPlayer::loadRecording(const char *filepath, uint16_t startLed,
-                               uint16_t stopLed, float secondsElapsed) {
+void FSEQPlayer::loadRecording(const char *filepath,
+                               uint16_t startLed,
+                               uint16_t stopLed,
+                               float secondsElapsed,
+                               bool loop)
+{
   if (recordingFile.available()) {
     clearLastPlayback();
-    recordingFile.close();
   }
   playbackLedStart = startLed;
   playbackLedStop = stopLed;
@@ -183,6 +185,10 @@ void FSEQPlayer::loadRecording(const char *filepath, uint16_t startLed,
       currentFileName = currentFileName.substring(1);
   } else if (fileOnFS(filepath)) {
     DEBUG_PRINTF("Read file from FS: %s\n", filepath);
+	recordingFile = WLED_FS.open(filepath, "rb");
+    currentFileName = String(filepath);
+    if (currentFileName.startsWith("/"))
+      currentFileName = currentFileName.substring(1);
   } else {
     DEBUG_PRINTF("File %s not found (%s)\n", filepath,
                  USED_STORAGE_FILESYSTEMS);
@@ -234,13 +240,12 @@ void FSEQPlayer::loadRecording(const char *filepath, uint16_t startLed,
     frame = file_header.frame_count - 1;
   }
   // Set loop mode if secondsElapsed is exactly 1.0f
-  if (fabs(secondsElapsed - 1.0f) < 0.001f) {
-    recordingRepeats = RECORDING_REPEAT_LOOP;
-  } else {
-    recordingRepeats = RECORDING_REPEAT_DEFAULT;
-  }
+  recordingRepeats = loop
+    ? RECORDING_REPEAT_LOOP
+    : RECORDING_REPEAT_DEFAULT;
+	
   playNextRecordingFrame();
-  playNextRecordingFrame();
+  //playNextRecordingFrame();
 }
 
 void FSEQPlayer::clearLastPlayback() {

@@ -219,7 +219,7 @@ function toggleNormal(name, playBtn, loopBtn) {
 
   if (!isPlaying) {
 
-    fetch('/api/fseq/start?file=' + encodeURIComponent(name));
+    fetch('/api/fseq/start', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'file='+encodeURIComponent(name)})
 
     resetAllFseqButtons();
 
@@ -229,7 +229,7 @@ function toggleNormal(name, playBtn, loopBtn) {
 
   } else {
 
-    fetch('/api/fseq/stop');
+    fetch('/api/fseq/stop', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}})
     resetAllFseqButtons();
   }
 }
@@ -240,7 +240,7 @@ function toggleLoop(name, playBtn, loopBtn) {
 
   if (!isLooping) {
 
-    fetch('/api/fseq/startloop?file=' + encodeURIComponent(name));
+    fetch('/api/fseq/startloop', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'file='+encodeURIComponent(name)})
 
     resetAllFseqButtons();
 
@@ -250,7 +250,7 @@ function toggleLoop(name, playBtn, loopBtn) {
 
   } else {
 
-    fetch('/api/fseq/stop');
+    fetch('/api/fseq/stop', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}})
     resetAllFseqButtons();
   }
 }
@@ -287,7 +287,7 @@ function checkFseqStatus(){
 
 function deleteFile(name){
   if(!confirm("Delete "+name+"?"))return;
-  fetch('/api/sd/delete?path='+encodeURIComponent(name))
+  fetch('/api/sd/delete', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'path='+encodeURIComponent(name)})
     .then(()=>{ loadSDList(); loadFseqList(); });
 }
 
@@ -435,29 +435,36 @@ void WebUIManager::registerEndpoints() {
 
   // API - List FSEQ files
   server.on("/api/fseq/list", HTTP_GET, [](AsyncWebServerRequest *request) {
-    File root = SD_ADAPTER.open("/");
-    String json = "[";
-    if (root && root.isDirectory()) {
-      bool first = true;
-      File file = root.openNextFile();
-      while (file) {
-        String name = file.name();
-        if (name.endsWith(".fseq") || name.endsWith(".FSEQ")) {
-          if (!first)
-            json += ",";
-          first = false;
-          json += "{";
-          json += "\"name\":\"" + name + "\"";
-          json += "}";
-        }
-        file.close();
-        file = root.openNextFile();
-      }
-    }
-    root.close();
-    json += "]";
-    request->send(200, "application/json", json);
-  });
+
+	  File root = SD_ADAPTER.open("/");
+
+	  DynamicJsonDocument doc(4096);
+	  JsonArray files = doc.to<JsonArray>();
+
+	  if (root && root.isDirectory()) {
+
+		File file = root.openNextFile();
+		while (file) {
+
+		  String name = file.name();
+
+		  if (name.endsWith(".fseq") || name.endsWith(".FSEQ")) {
+			JsonObject obj = files.createNestedObject();
+			obj["name"] = name;
+		  }
+
+		  file.close();
+		  file = root.openNextFile();
+		}
+	  }
+
+	  root.close();
+
+	  String output;
+	  serializeJson(doc, output);
+
+	  request->send(200, "application/json", output);
+	});
 
   // API - File Upload
   server.on(
@@ -467,21 +474,25 @@ void WebUIManager::registerEndpoints() {
       },
       [](AsyncWebServerRequest *request, String filename, size_t index,
          uint8_t *data, size_t len, bool final) {
-        static File uploadFile;
         if (index == 0) {
           if (!filename.startsWith("/"))
             filename = "/" + filename;
-          uploadFile = SD_ADAPTER.open(filename.c_str(), FILE_WRITE);
+          File *f = new File(SD_ADAPTER.open(filename.c_str(), FILE_WRITE));
+          request->_tempObject = f;
         }
-        if (uploadFile) {
-          uploadFile.write(data, len);
-          if (final)
-            uploadFile.close();
+        File *f = static_cast<File*>(request->_tempObject);
+        if (f && *f) {
+          f->write(data, len);
+          if (final) {
+            f->close();
+            delete f;
+            request->_tempObject = nullptr;
+          }
         }
       });
 
   // API - File Delete
-  server.on("/api/sd/delete", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/api/sd/delete", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (!request->hasArg("path")) {
       request->send(400, "text/plain", "Missing path");
       return;
@@ -494,7 +505,7 @@ void WebUIManager::registerEndpoints() {
   });
 
   // API - Start FSEQ (normal playback)
-  server.on("/api/fseq/start", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/api/fseq/start", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (!request->hasArg("file")) {
       request->send(400, "text/plain", "Missing file param");
       return;
@@ -502,13 +513,13 @@ void WebUIManager::registerEndpoints() {
     String filepath = request->arg("file");
     if (!filepath.startsWith("/"))
       filepath = "/" + filepath;
-    FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 0.0f);
+    FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 0.0f, false);
     request->send(200, "text/plain", "FSEQ started");
   });
 
   // API - Start FSEQ in loop mode
   server.on(
-      "/api/fseq/startloop", HTTP_GET, [](AsyncWebServerRequest *request) {
+      "/api/fseq/startloop", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!request->hasArg("file")) {
           request->send(400, "text/plain", "Missing file param");
           return;
@@ -517,12 +528,12 @@ void WebUIManager::registerEndpoints() {
         if (!filepath.startsWith("/"))
           filepath = "/" + filepath;
         // Passing 1.0f enables loop mode in loadRecording()
-        FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 1.0f);
+        FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 1.0f, true);
         request->send(200, "text/plain", "FSEQ loop started");
       });
 
   // API - Stop FSEQ
-  server.on("/api/fseq/stop", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/api/fseq/stop", HTTP_POST, [](AsyncWebServerRequest *request) {
     FSEQPlayer::clearLastPlayback();
     if (realtimeOverride == REALTIME_OVERRIDE_ONCE)
       realtimeOverride = REALTIME_OVERRIDE_NONE;
@@ -535,23 +546,17 @@ void WebUIManager::registerEndpoints() {
     request->send(200, "text/plain", "FSEQ stopped");
   });
 
-  // API - FSEQ Status
-  server.on("/api/fseq/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+	// API - FSEQ Status
+	server.on("/api/fseq/status", HTTP_GET, [](AsyncWebServerRequest *request) {
 
-    bool playing = FSEQPlayer::isPlaying();
-    String file = FSEQPlayer::getFileName();
+	  DynamicJsonDocument doc(512);
 
-    String json = "{";
-    json += "\"playing\":";
-    json += (playing ? "true" : "false");
-    json += ",";
+	  doc["playing"] = FSEQPlayer::isPlaying();
+	  doc["file"]    = FSEQPlayer::getFileName();
 
-    json += "\"file\":\"";
-    json += file;
-    json += "\"";
+	  String output;
+	  serializeJson(doc, output);
 
-    json += "}";
-
-    request->send(200, "application/json", json);
-  });
+	  request->send(200, "application/json", output);
+	});
 }

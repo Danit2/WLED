@@ -33,6 +33,7 @@ public:
   }
   // Write a block of data to the buffer
   size_t write(const uint8_t *buffer, size_t size) override {
+	if (!_buffer) return 0;
     size_t total = 0;
     while (size > 0) {
       size_t space = _capacity - _offset;
@@ -77,10 +78,10 @@ private:
 #define CTRL_PKT_BLANK 3
 
 // UDP port for FPP discovery/synchronization
-const uint16_t UDP_SYNC_PORT = 32320;
+inline constexpr uint16_t UDP_SYNC_PORT = 32320;
 
-unsigned long lastPingTime = 0;
-const unsigned long pingInterval = 5000;
+inline unsigned long lastPingTime = 0;
+inline constexpr unsigned long pingInterval = 5000;
 
 // Inline functions to write 16-bit and 32-bit values
 static inline void write16(uint8_t *dest, uint16_t value) {
@@ -194,7 +195,8 @@ private:
 	  if (FSEQPlayer::isPlaying()) {
 
 		String fileName = FSEQPlayer::getFileName();
-		uint32_t elapsed = FSEQPlayer::getElapsedSeconds();
+		float elapsedF = FSEQPlayer::getElapsedSeconds();
+        uint32_t elapsed = (uint32_t)elapsedF;
 
 		doc["current_sequence"] = fileName;
 		doc["playlist"] = "";
@@ -205,8 +207,8 @@ private:
 
 		uint32_t mins = elapsed / 60;
 		uint32_t secs = elapsed % 60;
-		char timeStr[6];
-		sprintf(timeStr, "%02d:%02d", mins, secs);
+		char timeStr[16];
+        snprintf(timeStr, sizeof(timeStr), "%02u:%02u", mins, secs);
 
 		doc["time_elapsed"] = timeStr;
 		doc["time_remaining"] = "00:00";
@@ -443,11 +445,11 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
   // UDP - process received packet
   void processUdpPacket(AsyncUDPPacket packet) {
     // Print the raw UDP packet in hex format for debugging
-    DEBUG_PRINTLN(F("[FPP] Raw UDP Packet:"));
-    for (size_t i = 0; i < packet.length(); i++) {
-      DEBUG_PRINTF("%02X ", packet.data()[i]);
-    }
-    DEBUG_PRINTLN();
+    //  DEBUG_PRINTLN(F("[FPP] Raw UDP Packet:"));
+    //for (size_t i = 0; i < packet.length(); i++) {
+    //   DEBUG_PRINTF("%02X ", packet.data()[i]);
+    // }
+    // DEBUG_PRINTLN();
 
     if (packet.length() < 4)
       return;
@@ -537,25 +539,6 @@ public:
   // Setup function called once at startup
   void setup() {
     DEBUG_PRINTF("[%s] FPP Usermod loaded\n", _name);
-#ifdef WLED_USE_SD_SPI
-    int8_t csPin = UsermodFseq::getCsPin();
-    int8_t sckPin = UsermodFseq::getSckPin();
-    int8_t misoPin = UsermodFseq::getMisoPin();
-    int8_t mosiPin = UsermodFseq::getMosiPin();
-    if (!SD.begin(csPin)) {
-      DEBUG_PRINTF("[%s] ERROR: SD.begin() failed with CS pin %d!\n", _name,
-                   csPin);
-    } else {
-      DEBUG_PRINTF("[%s] SD card initialized (SPI) with CS pin %d\n", _name,
-                   csPin);
-    }
-#elif defined(WLED_USE_SD_MMC)
-    if (!SD_MMC.begin()) {
-      DEBUG_PRINTF("[%s] ERROR: SD_MMC.begin() failed!\n", _name);
-    } else {
-      DEBUG_PRINTF("[%s] SD card initialized (MMC)\n", _name);
-    }
-#endif
 
     // Register API endpoints
     server.on("/api/system/info", HTTP_GET,
@@ -739,14 +722,11 @@ public:
           lastPingTime = millis();
       }
     }
-	
-    // Process FSEQ playback
-    FSEQPlayer::handlePlayRecording();
   }
 
-  uint16_t getId() { return USERMOD_ID_SD_CARD; }
-  void addToConfig(JsonObject &root) {}
-  bool readFromConfig(JsonObject &root) { return true; }
+  uint16_t getId() override { return USERMOD_ID_SD_CARD; }
+  void addToConfig(JsonObject &root) override {}
+  bool readFromConfig(JsonObject &root) override { return true; }
 };
 
 const char UsermodFPP::_name[] PROGMEM = "FPP Connect";

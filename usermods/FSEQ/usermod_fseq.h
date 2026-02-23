@@ -49,12 +49,12 @@ inline SPIClass spiPort = SPI;
 inline SPIClass spiPort = SPI;
 #endif
 #define SPI_PORT_DEFINED
-#include "../usermods/FSEQ/fseq_player.h"
-#include "../usermods/FSEQ/sd_manager.h"
-#include "../usermods/FSEQ/web_ui_manager.h"
-#include "wled.h"
 #endif
 #endif
+
+#include "fseq_player.h"
+#include "sd_manager.h"
+#include "web_ui_manager.h"
 
 // Usermod for FSEQ playback with UDP and web UI support
 class UsermodFseq : public Usermod {
@@ -124,6 +124,11 @@ public:
     JsonObject top = root[FPSTR(_name)];
     if (top.isNull())
       return false;
+  
+    int8_t oldCs   = configPinSourceSelect;
+    int8_t oldSck  = configPinSourceClock;
+    int8_t oldMiso = configPinPoci;
+    int8_t oldMosi = configPinPico;
 
     if (top["csPin"].is<int>())
       configPinSourceSelect = top["csPin"].as<int>();
@@ -134,7 +139,7 @@ public:
     if (top["mosiPin"].is<int>())
       configPinPico = top["mosiPin"].as<int>();
 
-    reinit_SD_SPI(); // reinitialize SD with new pins
+    reinit_SD_SPI(oldCs, oldSck, oldMiso, oldMosi); // reinitialize SD with new pins
     return true;
 #else
     return false;
@@ -143,14 +148,14 @@ public:
 
 #ifdef WLED_USE_SD_SPI
   // Reinitialize SD SPI with updated pins
-  void reinit_SD_SPI() {
+  void reinit_SD_SPI(int8_t oldCs, int8_t oldSck, int8_t oldMiso, int8_t oldMosi) {
     // Deinit SD if needed
     SD_ADAPTER.end();
     // Reallocate pins
-    PinManager::deallocatePin(configPinSourceSelect, PinOwner::UM_SdCard);
-    PinManager::deallocatePin(configPinSourceClock, PinOwner::UM_SdCard);
-    PinManager::deallocatePin(configPinPoci, PinOwner::UM_SdCard);
-    PinManager::deallocatePin(configPinPico, PinOwner::UM_SdCard);
+    PinManager::deallocatePin(oldCs, PinOwner::UM_SdCard);
+    PinManager::deallocatePin(oldSck, PinOwner::UM_SdCard);
+    PinManager::deallocatePin(oldMiso, PinOwner::UM_SdCard);
+    PinManager::deallocatePin(oldMosi, PinOwner::UM_SdCard);
 
     PinManagerPinType pins[4] = {{configPinSourceSelect, true},
                                  {configPinSourceClock, true},

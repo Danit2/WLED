@@ -7,9 +7,6 @@
 #ifndef RECORDING_REPEAT_DEFAULT
 #define RECORDING_REPEAT_DEFAULT 0
 #endif
-#ifndef REALTIME_MODE_FSEQ
-#define REALTIME_MODE_FSEQ 10
-#endif
 
 #include "wled.h"
 #ifdef WLED_USE_SD_SPI
@@ -33,8 +30,11 @@ public:
     uint8_t flags;
   };
 
-  static void loadRecording(const char *filepath, uint16_t startLed,
-                            uint16_t stopLed, float secondsElapsed = 0.0f);
+  static void loadRecording(const char *filepath,
+                            uint16_t startLed,
+                            uint16_t stopLed,
+                            float secondsElapsed = 0.0f,
+                            bool loop = false);
   static void handlePlayRecording();
   static void clearLastPlayback();
   static void syncPlayback(float secondsElapsed);
