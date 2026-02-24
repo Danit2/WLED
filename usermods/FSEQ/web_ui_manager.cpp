@@ -236,7 +236,7 @@ function toggleNormal(name, playBtn, loopBtn) {
 
 function toggleLoop(name, playBtn, loopBtn) {
 
-  const isLooping = loopBtn.dataset.state === "looping";
+  const isLooping = loopBtn.dataset.state === "playing";
 
   if (!isLooping) {
 
@@ -399,23 +399,20 @@ void WebUIManager::registerEndpoints() {
 	  uint64_t totalBytes = SD_ADAPTER.totalBytes();
 	  uint64_t usedBytes  = SD_ADAPTER.usedBytes();
 
-	  String json = "{";
-	  json += "\"files\":[";
+	  // Adjust size if needed (depends on max file count)
+	  DynamicJsonDocument doc(8192);
+
+	  JsonObject rootObj = doc.to<JsonObject>();
+	  JsonArray files = rootObj.createNestedArray("files");
 
 	  if (root && root.isDirectory()) {
-		bool first = true;
+
 		File file = root.openNextFile();
-
 		while (file) {
-		  if (!first) json += ",";
-		  first = false;
 
-		  float sizeKB = file.size() / 1024.0;
-
-		  json += "{";
-		  json += "\"name\":\"" + String(file.name()) + "\",";
-		  json += "\"size\":" + String(sizeKB, 2);
-		  json += "}";
+		  JsonObject obj = files.createNestedObject();
+		  obj["name"] = file.name();
+		  obj["size"] = (float)file.size() / 1024.0;
 
 		  file.close();
 		  file = root.openNextFile();
@@ -424,12 +421,13 @@ void WebUIManager::registerEndpoints() {
 
 	  root.close();
 
-	  json += "],";
-	  json += "\"usedKB\":" + String(usedBytes / 1024.0, 2) + ",";
-	  json += "\"totalKB\":" + String(totalBytes / 1024.0, 2);
-	  json += "}";
+	  rootObj["usedKB"]  = (float)usedBytes / 1024.0;
+	  rootObj["totalKB"] = (float)totalBytes / 1024.0;
 
-	  request->send(200, "application/json", json);
+	  String output;
+	  serializeJson(doc, output);
+
+	  request->send(200, "application/json", output);
 	});
 
 
@@ -479,6 +477,12 @@ void WebUIManager::registerEndpoints() {
             filename = "/" + filename;
           File *f = new File(SD_ADAPTER.open(filename.c_str(), FILE_WRITE));
           request->_tempObject = f;
+		  if (!*f) {
+          delete f;
+          request->_tempObject = nullptr;
+          request->send(500, "text/plain", "Failed to open file for writing");
+          return;
++        }
         }
         File *f = static_cast<File*>(request->_tempObject);
         if (f && *f) {
@@ -488,6 +492,10 @@ void WebUIManager::registerEndpoints() {
             delete f;
             request->_tempObject = nullptr;
           }
+		} else if (final && f) {
+        // Cleanup leaked handle if open failed and we somehow reach final
+        delete f;
+        request->_tempObject = nullptr;
         }
       });
 
@@ -528,7 +536,7 @@ void WebUIManager::registerEndpoints() {
         if (!filepath.startsWith("/"))
           filepath = "/" + filepath;
         // Passing 1.0f enables loop mode in loadRecording()
-        FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 1.0f, true);
+        FSEQPlayer::loadRecording(filepath.c_str(), 0, uint16_t(-1), 0.0f, true);
         request->send(200, "text/plain", "FSEQ loop started");
       });
 

@@ -451,7 +451,7 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
     // }
     // DEBUG_PRINTLN();
 
-    if (packet.length() < 4)
+    if (packet.length() < 5)
       return;
     if (packet.data()[0] != 'F' || packet.data()[1] != 'P' ||
         packet.data()[2] != 'P' || packet.data()[3] != 'D')
@@ -459,6 +459,10 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
     uint8_t packetType = packet.data()[4];
     switch (packetType) {
     case CTRL_PKT_SYNC: {
+	  if (packet.length() < 17) {
+      DEBUG_PRINTLN(F("[FPP] Sync packet too short, ignoring"));
+      break;
+      }
       FPPMultiSyncPacket *syncPacket =
           reinterpret_cast<FPPMultiSyncPacket *>(packet.data());
       DEBUG_PRINTLN(F("[FPP] Received UDP sync packet"));
@@ -598,12 +602,12 @@ public:
             DEBUG_PRINTF("[FPP] Using filename: %s\n",
                          currentUploadFileName.c_str());
 
-            if (SD.exists(currentUploadFileName.c_str())) {
-                SD.remove(currentUploadFileName.c_str());
+            if (SD_ADAPTER.exists(currentUploadFileName.c_str())) {
+                SD_ADAPTER.remove(currentUploadFileName.c_str());
             }
 
             currentUploadFile =
-                SD.open(currentUploadFileName.c_str(), FILE_WRITE);
+                SD_ADAPTER.open(currentUploadFileName.c_str(), FILE_WRITE);
 
             if (!currentUploadFile) {
                 DEBUG_PRINTLN(F("[FPP] ERROR: Failed to open file"));

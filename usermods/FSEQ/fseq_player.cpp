@@ -85,15 +85,15 @@ void FSEQPlayer::printHeaderInfo() {
 }
 
 void FSEQPlayer::processFrameData() {
-  uint16_t packetLength = file_header.channel_count;
+  uint32_t packetLength = file_header.channel_count;
   uint16_t lastLed =
-      min(playbackLedStop, uint16_t(playbackLedStart + (packetLength / 3)));
-  char frame_data[buffer_size];
+      min((uint32_t)playbackLedStop, (uint32_t)playbackLedStart + (packetLength / 3));
+    char frame_data[48];   // fixed size; buffer_size is always 48
   CRGB *crgb = reinterpret_cast<CRGB *>(frame_data);
-  uint16_t bytes_remaining = packetLength;
+  uint32_t bytes_remaining = packetLength;
   uint16_t index = playbackLedStart;
   while (index < lastLed && bytes_remaining > 0) {
-    uint16_t length = min(bytes_remaining, buffer_size);
+    uint16_t length = (uint16_t)min(bytes_remaining, (uint32_t)sizeof(frame_data));
     recordingFile.readBytes(frame_data, length);
     bytes_remaining -= length;
     for (uint16_t offset = 0; offset < length / 3; offset++) {
