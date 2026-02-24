@@ -83,19 +83,6 @@ inline constexpr uint16_t UDP_SYNC_PORT = 32320;
 inline unsigned long lastPingTime = 0;
 inline constexpr unsigned long pingInterval = 5000;
 
-// Inline functions to write 16-bit and 32-bit values
-static inline void write16(uint8_t *dest, uint16_t value) {
-  dest[0] = (value >> 8) & 0xff;
-  dest[1] = value & 0xff;
-}
-
-static inline void write32(uint8_t *dest, uint32_t value) {
-  dest[0] = (value >> 24) & 0xff;
-  dest[1] = (value >> 16) & 0xff;
-  dest[2] = (value >> 8) & 0xff;
-  dest[3] = value & 0xff;
-}
-
 // Structure for the synchronization packet
 // Using pragma pack to avoid any padding issues
 #pragma pack(push, 1)
@@ -142,9 +129,16 @@ private:
     doc["Variant"] = "WLED";
     doc["Mode"] = "remote";
     doc["Version"] = versionString;
-
-    doc["majorVersion"] = 16;
-    doc["minorVersion"] = 0;
+    
+	uint16_t major = 0, minor = 0;
+    String ver = versionString;
+    int dashPos = ver.indexOf('-');
+    if (dashPos > 0) ver = ver.substring(0, dashPos);
+    int dotPos = ver.indexOf('.');
+    if (dotPos > 0) { major = ver.substring(0, dotPos).toInt(); minor = ver.substring(dotPos + 1).toInt(); }
+    else { major = ver.toInt(); }
+    doc["majorVersion"] = major;
+    doc["minorVersion"] = minor;
     doc["typeId"] = 195;
     doc["UUID"] = WiFi.macAddress();
 
@@ -267,7 +261,7 @@ private:
 
 	  adv["majorVersion"] = major;
 	  adv["minorVersion"] = minor;
-	  adv["typeId"] = 165;
+	  adv["typeId"] = 195;
 	  adv["UUID"] = WiFi.macAddress();
 
 	  JsonObject util = adv.createNestedObject("Utilization");
@@ -301,7 +295,7 @@ private:
 	  sys["ip"] = WiFi.localIP().toString();
 	  sys["version"] = versionString;
 	  sys["hardwareType"] = "WLED";
-	  sys["type"] = 165;
+	  sys["type"] = 195;
 	  sys["num_chan"] = strip.getLength() * 3;
 	  sys["NumPixelPort"] = 1;
 	  sys["NumSerialPort"] = 0;
@@ -417,31 +411,6 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
   udp.writeTo(buf, sizeof(buf), destination, udpPort);
 }
 
-/*   // UDP - send a sync message
-  void sendSyncMessage(uint8_t action, const String &fileName,
-                       uint32_t currentFrame, float secondsElapsed) {
-    FPPMultiSyncPacket syncPacket;
-    // Fill in header "FPPD"
-    syncPacket.header[0] = 'F';
-    syncPacket.header[1] = 'P';
-    syncPacket.header[2] = 'P';
-    syncPacket.header[3] = 'D';
-    syncPacket.packet_type = CTRL_PKT_SYNC;
-    write16((uint8_t *)&syncPacket.data_len, sizeof(syncPacket));
-    syncPacket.sync_action = action;
-    syncPacket.sync_type = 0; // FSEQ synchronization
-    write32((uint8_t *)&syncPacket.frame_number, currentFrame);
-    syncPacket.seconds_elapsed = secondsElapsed;
-    strncpy(syncPacket.filename, fileName.c_str(),
-            sizeof(syncPacket.filename) - 1);
-    syncPacket.filename[sizeof(syncPacket.filename) - 1] = 0x00;
-    // Send to both broadcast and multicast addresses
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket),
-                IPAddress(255, 255, 255, 255), udpPort);
-    udp.writeTo((uint8_t *)&syncPacket, sizeof(syncPacket), multicastAddr,
-                udpPort);
-  } */
-
   // UDP - process received packet
   void processUdpPacket(AsyncUDPPacket packet) {
     // Print the raw UDP packet in hex format for debugging
@@ -459,24 +428,45 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
     uint8_t packetType = packet.data()[4];
     switch (packetType) {
     case CTRL_PKT_SYNC: {
-	  if (packet.length() < 17) {
-      DEBUG_PRINTLN(F("[FPP] Sync packet too short, ignoring"));
-      break;
-      }
-      FPPMultiSyncPacket *syncPacket =
-          reinterpret_cast<FPPMultiSyncPacket *>(packet.data());
-      DEBUG_PRINTLN(F("[FPP] Received UDP sync packet"));
-      // Print detailed sync packet information:
-      DEBUG_PRINTF("[FPP] Sync Packet - Action: %d\n", syncPacket->sync_action);
-      DEBUG_PRINT(F("[FPP] Filename: "));
-      DEBUG_PRINTLN(syncPacket->filename);
-      DEBUG_PRINTF("[FPP] Frame Number: %lu\n", syncPacket->frame_number);
-      DEBUG_PRINTF("[FPP] Seconds Elapsed: %.2f\n",
-                   syncPacket->seconds_elapsed);
-      ProcessSyncPacket(syncPacket->sync_action, String(syncPacket->filename),
-                        syncPacket->seconds_elapsed);
-      break;
-    }
+
+	  const size_t baseSize = 17; // up to seconds_elapsed
+
+	  if (packet.length() <= baseSize) {
+		DEBUG_PRINTLN(F("[FPP] Sync packet too short, ignoring"));
+		break;
+	  }
+
+	  FPPMultiSyncPacket *syncPacket =
+		  reinterpret_cast<FPPMultiSyncPacket *>(packet.data());
+
+	  DEBUG_PRINTLN(F("[FPP] Received UDP sync packet"));
+
+	  DEBUG_PRINTF("[FPP] Sync Packet - Action: %d\n", syncPacket->sync_action);
+	  DEBUG_PRINTF("[FPP] Frame Number: %lu\n", syncPacket->frame_number);
+	  DEBUG_PRINTF("[FPP] Seconds Elapsed: %.2f\n",
+				   syncPacket->seconds_elapsed);
+
+	  // ---- SAFE filename extraction ----
+	  size_t filenameOffset = 17;
+	  size_t maxFilenameLen =
+		  min((size_t)64, packet.length() - filenameOffset);
+
+	  char safeFilename[65];
+	  memcpy(safeFilename,
+			 packet.data() + filenameOffset,
+			 maxFilenameLen);
+
+	  safeFilename[maxFilenameLen] = '\0';
+
+	  DEBUG_PRINT(F("[FPP] Filename: "));
+	  DEBUG_PRINTLN(safeFilename);
+
+	  ProcessSyncPacket(syncPacket->sync_action,
+						String(safeFilename),
+						syncPacket->seconds_elapsed);
+
+	  break;
+	}
     case CTRL_PKT_PING:
       DEBUG_PRINTLN(F("[FPP] Received UDP ping packet"));
       sendPingPacket(packet.remoteIP());

@@ -1,6 +1,6 @@
 # ✨ Usermod FSEQ ✨
 
-> **Created original by: Andrej Chrcek** **Updatet by: Danit2**
+> **Original created original by: Andrej Chrcek**
 
 Welcome to the **Usermod FSEQ** project!  
 This module extends your WLED setup by enabling FSEQ file playback from an SD card, including a web UI and UDP remote control. It combines creativity with functionality to enhance your lighting experience.
@@ -67,38 +67,34 @@ custom_usermods = FSEQ
 GET /fsequi  
 Returns the main HTML interface for the SD & FSEQ Manager.
 
-GET api/sd/list  
+GET /api/sd/list  
 Displays an HTML page listing all files on the SD card, including options to delete files and upload new ones.
 
-POST api/sd/upload  
+POST /api/sd/upload  
 Handles file uploads using multipart/form-data.
 
-POST /sd/delete
-
+POST /api/sd/delete
 Deletes the specified file from the SD card.  
-Example: /sd/delete 
+Example: /api/sd/delete 
 body: file=example.fseq
 
 ---
 
 ### FSEQ Control
 
-GET api/fseq/list  
+GET /api/fseq/list  
 Returns an HTML page listing all .fseq and .FSEQ files found on the SD card. Each file includes a play button.
 
-POST api/fseq/start
+POST /api/fseq/start
 body: file=animation.fseq  
 Starts playback of the selected FSEQ file.  
 
-POST api/fseq/startloop
+POST /api/fseq/startloop
 body: file=animation.fseq  
 Starts playback of the selected FSEQ file in loop mode.  
 
-POST api/fseq/stop  
+POST /api/fseq/stop  
 Stops the current FSEQ playback and clears the active session.
-
-GET /api/fseq/list  
-Returns a JSON list of all FSEQ files on the SD card.
 
 ---
 
@@ -113,18 +109,32 @@ Returns a JSON list of the system status
 GET /api/fppd/multiSyncSystems
 Returns a JSON list of the multisyncinfos
 
+POST /fpp
+Endpoint for file upload from xLights (raw, application/octet-stream)
+
+GET /fseqfilelist
+Endpoint to list FSEQ files on SD card for FPP Player
+
+GET /fpp/connect
+Endpoint to start FSEQ playback from FPP Player
+
+GET /fpp/stop
+Endpoint to stop FSEQ playback
+
 ---
 
 ## Configurable SPI Pin Settings
 
 Default SPI pin assignments for SD over SPI:
 
+```cpp
 #ifdef WLED_USE_SD_SPI
 int8_t UsermodFseq::configPinSourceSelect = 5;
 int8_t UsermodFseq::configPinSourceClock  = 18;
 int8_t UsermodFseq::configPinPoci         = 19;
 int8_t UsermodFseq::configPinPico         = 23;
 #endif
+```
 
 These values can be modified via the WLED Usermods settings tab without recompiling the firmware.
 

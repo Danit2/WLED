@@ -220,12 +220,14 @@ function toggleNormal(name, playBtn, loopBtn) {
   if (!isPlaying) {
 
     fetch('/api/fseq/start', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'file='+encodeURIComponent(name)})
-
-    resetAllFseqButtons();
-
-    playBtn.dataset.state = "playing";
-    playBtn.textContent = "Stop";
-    playBtn.classList.add("btn-stop");
+      .then(r => {
+        if (r.ok) {
+          resetAllFseqButtons();
+          playBtn.dataset.state = "playing";
+          playBtn.textContent = "Stop";
+          playBtn.classList.add("btn-stop");
+        }
+      });
 
   } else {
 
@@ -241,12 +243,14 @@ function toggleLoop(name, playBtn, loopBtn) {
   if (!isLooping) {
 
     fetch('/api/fseq/startloop', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'file='+encodeURIComponent(name)})
-
-    resetAllFseqButtons();
-
-    loopBtn.dataset.state = "looping";
-    loopBtn.textContent = "Stop";
-    loopBtn.classList.add("btn-stop");
+      .then(r => {
+        if (r.ok) {
+          resetAllFseqButtons();
+          playBtn.dataset.state = "looping";
+          playBtn.textContent = "Stop";
+          playBtn.classList.add("btn-stop");
+        }
+      });
 
   } else {
 
@@ -428,6 +432,11 @@ void WebUIManager::registerEndpoints() {
 
 	  String output;
 	  serializeJson(doc, output);
+	  
+	  if (doc.overflowed()) {
+      request->send(507, "text/plain", "JSON buffer too small; file list may be truncated");
+      return;
+      }
 
 	  request->send(200, "application/json", output);
 	});
