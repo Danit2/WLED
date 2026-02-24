@@ -728,7 +728,7 @@ public:
     }
   }
 
-  uint16_t getId() override { return USERMOD_ID_SD_CARD; }
+  uint16_t getId() override { return USERMOD_ID_FPP; }
   void addToConfig(JsonObject &root) override {}
   bool readFromConfig(JsonObject &root) override { return true; }
 };
