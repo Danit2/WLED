@@ -436,15 +436,16 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
 		break;
 	  }
 
-	  FPPMultiSyncPacket *syncPacket =
-		  reinterpret_cast<FPPMultiSyncPacket *>(packet.data());
+	  uint8_t syncAction = packet.data()[7];
+	  uint32_t frameNumber = 0;
+	  float secondsElapsed = 0.0f;
+	  memcpy(&frameNumber, packet.data() + 9, sizeof(frameNumber));
+	  memcpy(&secondsElapsed, packet.data() + 13, sizeof(secondsElapsed));
 
 	  DEBUG_PRINTLN(F("[FPP] Received UDP sync packet"));
-
-	  DEBUG_PRINTF("[FPP] Sync Packet - Action: %d\n", syncPacket->sync_action);
-	  DEBUG_PRINTF("[FPP] Frame Number: %lu\n", syncPacket->frame_number);
-	  DEBUG_PRINTF("[FPP] Seconds Elapsed: %.2f\n",
-				   syncPacket->seconds_elapsed);
+	  DEBUG_PRINTF("[FPP] Sync Packet - Action: %d\n", syncAction);
+	  DEBUG_PRINTF("[FPP] Frame Number: %lu\n", frameNumber);
+	  DEBUG_PRINTF("[FPP] Seconds Elapsed: %.2f\n", secondsElapsed);
 
 	  // ---- SAFE filename extraction ----
 	  size_t filenameOffset = 17;
@@ -461,9 +462,7 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
 	  DEBUG_PRINT(F("[FPP] Filename: "));
 	  DEBUG_PRINTLN(safeFilename);
 
-	  ProcessSyncPacket(syncPacket->sync_action,
-						String(safeFilename),
-						syncPacket->seconds_elapsed);
+	  ProcessSyncPacket(syncAction, String(safeFilename), secondsElapsed);
 
 	  break;
 	}
@@ -566,6 +565,10 @@ public:
         DEBUG_PRINTF("[FPP] Chunk index=%u len=%u total=%u\n", index, len, total);
 
         if (index == 0) {
+			if (uploadStream || currentUploadFile) {
+                request->send(409, "text/plain", "Upload already in progress");
+                return;
+            }
 
             DEBUG_PRINTLN("[FPP] Starting file upload");
 
@@ -723,4 +726,4 @@ public:
   bool readFromConfig(JsonObject &root) override { return true; }
 };
 
-const char UsermodFPP::_name[] PROGMEM = "FPP Connect";
+inline const char UsermodFPP::_name[] PROGMEM = "FPP Connect";

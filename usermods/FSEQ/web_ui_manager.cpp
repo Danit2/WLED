@@ -3,6 +3,11 @@
 #include "sd_manager.h"
 #include "usermod_fseq.h"
 
+struct UploadContext {
+  File* file;
+  bool error;
+};
+
 static const char PAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -471,44 +476,71 @@ void WebUIManager::registerEndpoints() {
 
 	  String output;
 	  serializeJson(doc, output);
+	  
+	  if (doc.overflowed()) {
+	    request->send(507, "text/plain", "JSON buffer too small; file list may be truncated");
+	    return;
+	  }
 
 	  request->send(200, "application/json", output);
 	});
 
   // API - File Upload
-  server.on(
-      "/api/sd/upload", HTTP_POST,
-      [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Upload complete");
-      },
-      [](AsyncWebServerRequest *request, String filename, size_t index,
-         uint8_t *data, size_t len, bool final) {
-        if (index == 0) {
-          if (!filename.startsWith("/"))
-            filename = "/" + filename;
-          File *f = new File(SD_ADAPTER.open(filename.c_str(), FILE_WRITE));
-          request->_tempObject = f;
-		  if (!*f) {
-          delete f;
-          request->_tempObject = nullptr;
-          request->send(500, "text/plain", "Failed to open file for writing");
-          return;
-        }
-        }
-        File *f = static_cast<File*>(request->_tempObject);
-        if (f && *f) {
-          f->write(data, len);
-          if (final) {
-            f->close();
-            delete f;
-            request->_tempObject = nullptr;
-          }
-		} else if (final && f) {
-        // Cleanup leaked handle if open failed and we somehow reach final
-        delete f;
-        request->_tempObject = nullptr;
-        }
-      });
+	server.on(
+	  "/api/sd/upload", HTTP_POST,
+
+	  // MAIN HANDLER
+	  [](AsyncWebServerRequest *request) {
+
+		UploadContext* ctx = static_cast<UploadContext*>(request->_tempObject);
+
+		if (!ctx || ctx->error || !ctx->file || !*(ctx->file)) {
+		  request->send(500, "text/plain", "Failed to open file for writing");
+		} else {
+		  request->send(200, "text/plain", "Upload complete");
+		}
+
+		// Cleanup
+		if (ctx) {
+		  if (ctx->file) {
+			if (*(ctx->file)) ctx->file->close();
+			delete ctx->file;
+		  }
+		  delete ctx;
+		  request->_tempObject = nullptr;
+		}
+	  },
+
+	  // UPLOAD CALLBACK
+	  [](AsyncWebServerRequest *request, String filename, size_t index,
+		 uint8_t *data, size_t len, bool final) {
+
+		UploadContext* ctx;
+
+		if (index == 0) {
+		  if (!filename.startsWith("/"))
+			filename = "/" + filename;
+
+		  ctx = new UploadContext();
+		  ctx->error = false;
+		  ctx->file = new File(SD_ADAPTER.open(filename.c_str(), FILE_WRITE));
+
+		  if (!*(ctx->file)) {
+			ctx->error = true;
+		  }
+
+		  request->_tempObject = ctx;
+		}
+
+		ctx = static_cast<UploadContext*>(request->_tempObject);
+
+		if (!ctx || ctx->error || !ctx->file || !*(ctx->file))
+		  return;
+
+		ctx->file->write(data, len);
+		
+	  }
+	);
 
   // API - File Delete
   server.on("/api/sd/delete", HTTP_POST, [](AsyncWebServerRequest *request) {
