@@ -31,16 +31,18 @@ public:
   };
 
   static void loadRecording(const char *filepath,
-                            uint16_t startLed,
-                            uint16_t stopLed,
                             float secondsElapsed = 0.0f,
                             bool loop = false);
-  static void handlePlayRecording();
   static void clearLastPlayback();
   static void syncPlayback(float secondsElapsed);
   static bool isPlaying();
+  static void setLooping(bool loop);
   static String getFileName();
   static float getElapsedSeconds();
+
+  // Called from the WLED effect function – renders the current frame into
+  // the active SEGMENT using SEGMENT.setPixelColor().
+  static void renderFrameToSegment();
 
 private:
   FSEQPlayer() {}
@@ -54,8 +56,6 @@ private:
   static int32_t recordingRepeats;
   static uint32_t now;
   static uint32_t next_time;
-  static uint16_t playbackLedStart;
-  static uint16_t playbackLedStop;
   static uint32_t frame;
   static uint16_t buffer_size;
   static FileHeader file_header;
