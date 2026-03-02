@@ -274,31 +274,67 @@ float FSEQPlayer::getElapsedSeconds() {
 }
 
 void FSEQPlayer::syncPlayback(float secondsElapsed) {
+
   if (!isPlaying()) {
     DEBUG_PRINTLN("[FSEQ] Sync: Playback not active, cannot sync.");
     return;
   }
 
-  // Update internal secondsElapsed if we were tracking it
-  // FSEQPlayer::secondsElapsed = secondsElapsed; // If we were tracking it
-
   uint32_t expectedFrame =
       (uint32_t)((secondsElapsed * 1000.0f) / file_header.step_time);
+
   int32_t diff = (int32_t)expectedFrame - (int32_t)frame;
 
-  if (abs(diff) > 2) {
+  // -------------------------------
+  // Hard Resync
+  // -------------------------------
+  if (abs(diff) > 30) {
+
     frame = expectedFrame;
+
     uint32_t offset =
-        file_header.channel_data_offset + file_header.channel_count * frame;
+        file_header.channel_data_offset +
+        (uint32_t)file_header.channel_count * frame;
+
     if (recordingFile.seek(offset)) {
-      DEBUG_PRINTF("[FSEQ] Sync: Adjusted frame to %lu (diff=%ld)\n",
+      DEBUG_PRINTF("[FSEQ] HARD Sync -> frame=%lu (diff=%ld)\n",
                    expectedFrame, diff);
     } else {
-      DEBUG_PRINTLN("[FSEQ] Sync: Failed to seek to new frame");
+      DEBUG_PRINTLN("[FSEQ] HARD Sync failed to seek");
     }
+
+    return;
+  }
+
+  // -----------------------------------------
+  // Soft Sync
+  // -----------------------------------------
+  if (abs(diff) > 1) {
+
+    // Proportionaler Faktor wächst mit Drift
+    float correctionFactor = 0.05f * abs(diff);
+
+    // Begrenzen damit es nicht aggressiv wird
+    correctionFactor = constrain(correctionFactor, 0.05f, 0.4f);
+
+    int32_t timeAdjustment =
+        (int32_t)(diff * file_header.step_time * correctionFactor);
+
+    next_time -= timeAdjustment;
+
+    DEBUG_PRINTF(
+        "[FSEQ] Soft Sync diff=%ld factor=%.3f adjust=%ldus\n",
+        diff,
+        correctionFactor,
+        timeAdjustment
+    );
+
   } else {
-    DEBUG_PRINTF("[FSEQ] Sync: No adjustment needed (current frame: %lu, "
-                 "expected: %lu)\n",
-                 frame, expectedFrame);
+
+    DEBUG_PRINTF(
+        "[FSEQ] Sync OK (current=%lu expected=%lu)\n",
+        frame,
+        expectedFrame
+    );
   }
 }
