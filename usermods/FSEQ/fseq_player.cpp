@@ -10,16 +10,9 @@
 #include "SD_MMC.h"
 #endif
 
-// Static member definitions moved from header to avoid multiple definition
-// errors
-const char UsermodFseq::_name[] PROGMEM = "usermod FSEQ sd card";
-
-#ifdef WLED_USE_SD_SPI
-int8_t UsermodFseq::configPinSourceSelect = 5;
-int8_t UsermodFseq::configPinSourceClock = 18;
-int8_t UsermodFseq::configPinPoci = 19;
-int8_t UsermodFseq::configPinPico = 23;
-#endif
+// Static member definitions
+const char UsermodFseq::_name[] PROGMEM = "FSEQ";
+uint8_t UsermodFseq::fseqEffectId = 0;
 
 File FSEQPlayer::recordingFile;
 String FSEQPlayer::currentFileName = "";
@@ -29,8 +22,6 @@ uint8_t FSEQPlayer::colorChannels = 3;
 int32_t FSEQPlayer::recordingRepeats = RECORDING_REPEAT_DEFAULT;
 uint32_t FSEQPlayer::now = 0;
 uint32_t FSEQPlayer::next_time = 0;
-uint16_t FSEQPlayer::playbackLedStart = 0;
-uint16_t FSEQPlayer::playbackLedStop = uint16_t(-1);
 uint32_t FSEQPlayer::frame = 0;
 uint16_t FSEQPlayer::buffer_size = 48;
 FSEQPlayer::FileHeader FSEQPlayer::file_header;
@@ -86,25 +77,26 @@ void FSEQPlayer::printHeaderInfo() {
 
 void FSEQPlayer::processFrameData() {
   uint32_t packetLength = file_header.channel_count;
-  uint16_t lastLed =
-      min((uint32_t)playbackLedStop, (uint32_t)playbackLedStart + (packetLength / 3));
-    char frame_data[48];   // fixed size; buffer_size is always 48
+  uint16_t segLen = SEGLEN;  // number of virtual pixels in the current segment
+  uint16_t maxLeds = min((uint32_t)segLen, packetLength / 3);
+  char frame_data[48];   // fixed size; buffer_size is always 48
   CRGB *crgb = reinterpret_cast<CRGB *>(frame_data);
   uint32_t bytes_remaining = packetLength;
-  uint16_t index = playbackLedStart;
-  while (index < lastLed && bytes_remaining > 0) {
+  uint16_t index = 0;
+  while (index < maxLeds && bytes_remaining > 0) {
     uint16_t length = (uint16_t)min(bytes_remaining, (uint32_t)sizeof(frame_data));
     recordingFile.readBytes(frame_data, length);
     bytes_remaining -= length;
     for (uint16_t offset = 0; offset < length / 3; offset++) {
-      setRealtimePixel(index, crgb[offset].r, crgb[offset].g, crgb[offset].b,
-                       0);
-      if (++index > lastLed)
+      SEGMENT.setPixelColor(index, RGBW32(crgb[offset].r, crgb[offset].g, crgb[offset].b, 0));
+      if (++index >= maxLeds)
         break;
     }
   }
-  strip.show();
-  realtimeLock(3000, REALTIME_MODE_FSEQ);
+  // Fill remaining segment pixels with black if the file has fewer channels
+  for (uint16_t i = index; i < segLen; i++) {
+    SEGMENT.setPixelColor(i, BLACK);
+  }
   next_time = now + file_header.step_time;
 }
 
@@ -127,8 +119,7 @@ bool FSEQPlayer::stopBecauseAtTheEnd() {
       return false;
     }
 
-    DEBUG_PRINTLN("Finished playing recording, disabling realtime mode");
-    realtimeLock(10, REALTIME_MODE_INACTIVE);
+    DEBUG_PRINTLN("Finished playing recording");
     clearLastPlayback();
     return true;
   }
@@ -150,9 +141,9 @@ void FSEQPlayer::playNextRecordingFrame() {
   processFrameData();
 }
 
-void FSEQPlayer::handlePlayRecording() {
+void FSEQPlayer::renderFrameToSegment() {
   now = millis();
-  if (realtimeMode != REALTIME_MODE_FSEQ)
+  if (!isPlaying())
     return;
   if (now < next_time)
     return;
@@ -160,23 +151,13 @@ void FSEQPlayer::handlePlayRecording() {
 }
 
 void FSEQPlayer::loadRecording(const char *filepath,
-                               uint16_t startLed,
-                               uint16_t stopLed,
                                float secondsElapsed,
                                bool loop)
 {
   if (recordingFile.available()) {
     clearLastPlayback();
   }
-  playbackLedStart = startLed;
-  playbackLedStop = stopLed;
-  if (playbackLedStart == uint16_t(-1) || playbackLedStop == uint16_t(-1)) {
-    Segment sg = strip.getSegment(-1);
-    playbackLedStart = sg.start;
-    playbackLedStop = sg.stop;
-  }
-  DEBUG_PRINTF("FSEQ load animation on LED %d to %d\n", playbackLedStart,
-               playbackLedStop);
+  DEBUG_PRINTF("FSEQ load animation: %s\n", filepath);
   if (fileOnSD(filepath)) {
     DEBUG_PRINTF("Read file from SD: %s\n", filepath);
     recordingFile = SD_ADAPTER.open(filepath, "rb");
@@ -190,8 +171,7 @@ void FSEQPlayer::loadRecording(const char *filepath,
     if (currentFileName.startsWith("/"))
       currentFileName = currentFileName.substring(1);
   } else {
-    DEBUG_PRINTF("File %s not found (%s)\n", filepath,
-                 USED_STORAGE_FILESYSTEMS);
+    DEBUG_PRINTF("File %s not found on SD or FS\n", filepath);
     return;
   }
   if ((uint64_t)recordingFile.available() < sizeof(file_header)) {
@@ -232,9 +212,6 @@ void FSEQPlayer::loadRecording(const char *filepath,
                  file_header.step_time, FSEQ_DEFAULT_STEP_TIME);
     file_header.step_time = FSEQ_DEFAULT_STEP_TIME;
   }
-  if (realtimeOverride == REALTIME_OVERRIDE_ONCE) {
-    realtimeOverride = REALTIME_OVERRIDE_NONE;
-  }
   frame = (uint32_t)((secondsElapsed * 1000.0f) / file_header.step_time);
   if (frame >= file_header.frame_count) {
     frame = file_header.frame_count - 1;
@@ -249,9 +226,6 @@ void FSEQPlayer::loadRecording(const char *filepath,
 }
 
 void FSEQPlayer::clearLastPlayback() {
-  for (uint16_t i = playbackLedStart; i < playbackLedStop; i++) {
-    setRealtimePixel(i, 0, 0, 0, 0);
-  }
   frame = 0;
   recordingFile.close();
   currentFileName = "";
@@ -259,6 +233,10 @@ void FSEQPlayer::clearLastPlayback() {
 
 bool FSEQPlayer::isPlaying() {
   return recordingFile && frame < file_header.frame_count;
+}
+
+void FSEQPlayer::setLooping(bool loop) {
+  recordingRepeats = loop ? RECORDING_REPEAT_LOOP : RECORDING_REPEAT_DEFAULT;
 }
 
 String FSEQPlayer::getFileName() { return currentFileName; }

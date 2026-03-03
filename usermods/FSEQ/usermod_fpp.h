@@ -486,11 +486,29 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
     case CTRL_PKT_BLANK:
       DEBUG_PRINTLN(F("[FPP] Received UDP blank packet"));
       FSEQPlayer::clearLastPlayback();
-      realtimeLock(10, REALTIME_MODE_INACTIVE);
       break;
     default:
       DEBUG_PRINTLN(F("[FPP] Unknown UDP packet type"));
       break;
+    }
+  }
+
+  // Switch the main segment to the FSEQ Player effect and set its name
+  // to the given filename so the effect knows which file to play.
+  void activateFseqEffect(const String &fileName) {
+    uint8_t fxId = UsermodFseq::fseqEffectId;
+    if (fxId == 0) return; // effect not registered
+
+    Segment &seg = strip.getMainSegment();
+    // Strip leading '/' for the segment name (effect prepends it)
+    const char *nameStr = fileName.c_str();
+    if (nameStr[0] == '/') nameStr++;
+    seg.setName(nameStr);
+
+    if (seg.mode != fxId) {
+      seg.setMode(fxId);
+      seg.check1 = true; // enable looping for sync playback
+      stateChanged = true;
     }
   }
 
@@ -510,21 +528,17 @@ void sendPingPacket(IPAddress destination = IPAddress(255, 255, 255, 255)) {
 
     switch (action) {
     case 0: // SYNC_PKT_START
-      FSEQPlayer::loadRecording(fileName.c_str(), 0, strip.getLength(),
-                                secondsElapsed);
+      activateFseqEffect(fileName);
+      FSEQPlayer::loadRecording(fileName.c_str(), secondsElapsed);
       break;
     case 1: // SYNC_PKT_STOP
       FSEQPlayer::clearLastPlayback();
-      realtimeLock(10, REALTIME_MODE_INACTIVE);
       break;
     case 2: // SYNC_PKT_SYNC
-      DEBUG_PRINTLN(F("[FPP] ProcessSyncPacket: Sync command received"));
-      DEBUG_PRINTF("[FPP] Sync Packet - FileName: %s, Seconds Elapsed: %.2f\n",
-                   fileName.c_str(), secondsElapsed);
       if (!FSEQPlayer::isPlaying()) {
         DEBUG_PRINTLN(F("[FPP] Sync: Playback not active, starting playback."));
-        FSEQPlayer::loadRecording(fileName.c_str(), 0, strip.getLength(),
-                                  secondsElapsed);
+        activateFseqEffect(fileName);
+        FSEQPlayer::loadRecording(fileName.c_str(), secondsElapsed);
       } else {
         FSEQPlayer::syncPlayback(secondsElapsed);
       }
@@ -682,26 +696,6 @@ public:
       request->send(200, "application/json", json);
     });
 
-    // Endpoint to start FSEQ playback
-    server.on("/fpp/connect", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      if (!request->hasArg("file")) {
-        request->send(400, "text/plain", "Missing 'file' parameter");
-        return;
-      }
-      String filepath = request->arg("file");
-      if (!filepath.startsWith("/")) {
-        filepath = "/" + filepath;
-      }
-      // Use FSEQPlayer to start playback
-      FSEQPlayer::loadRecording(filepath.c_str(), 0, strip.getLength());
-      request->send(200, "text/plain", "FPP connect started: " + filepath);
-    });
-    // Endpoint to stop FSEQ playback
-    server.on("/fpp/stop", HTTP_GET, [this](AsyncWebServerRequest *request) {
-      FSEQPlayer::clearLastPlayback();
-      realtimeLock(10, REALTIME_MODE_INACTIVE);
-      request->send(200, "text/plain", "FPP connect stopped");
-    });
 
     // Initialize UDP listener for synchronization and ping
     if (!udpStarted && (WiFi.status() == WL_CONNECTED)) {
